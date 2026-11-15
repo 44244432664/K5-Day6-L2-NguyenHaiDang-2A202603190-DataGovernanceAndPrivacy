@@ -4,6 +4,47 @@ track: t05
 input: fixtures/t05_near_duplicate
 pred_file: suspect_pairs.csv
 params:
+  # Group-aware output split and human-review capacity.
   test_fraction: 0.3
   budget: 20
+
+  # Perceptual feature shapes. Hamming distances below use size^2 bits.
+  phash_size: 8
+  phash_highfreq_factor: 4
+  dhash_size: 8
+  histogram_bins: 16
+  thumbnail_width: 32
+  thumbnail_height: 18
+
+  # Initial development thresholds. Freeze these before official evaluation.
+  # Histogram distance is L1 in [0,2]; thumbnail distance is normalized MAE in [0,1].
+  phash_distance_max: 8
+  dhash_distance_max: 8
+  histogram_distance_max: 0.08
+  thumbnail_distance_max: 0.10
+  min_visual_signals: 2            # among pHash, dHash, and thumbnail evidence
+  duplicate_score_threshold: 0.75  # heuristic score, not a calibrated probability
+
+  # Review candidates surround the automatic duplicate threshold.
+  review_score_low: 0.55
+  review_score_high: 0.85
+
+  # Context may create a split constraint but never proves a duplicate by itself.
+  burst_window_seconds: 60.0
+  burst_max_span_seconds: 60.0     # bounds transitive timestamp chaining
+  max_component_size: 20           # larger inferred components require attention
+
+  # A future release policy may GO only with at most this many unresolved blockers.
+  decision_max_unresolved: 0
+
+  # Development protocol v2, revised before any instructor GT evaluation.
+  # Preserve the original score thresholds above; verify spatial RGB agreement
+  # under bounded centered crops and a shared scalar exposure gain.
+  verification_enabled: 1
+  verification_width: 48
+  verification_height: 32
+  verification_crop_max: 0.12
+  verification_crop_steps: 6
+  verification_error_max: 0.05       # exposure-relative RGB MAE, lower is closer
+  verification_min_texture: 0.02    # spatial RGB std; reject flat-image shortcuts
 eval_params: {}

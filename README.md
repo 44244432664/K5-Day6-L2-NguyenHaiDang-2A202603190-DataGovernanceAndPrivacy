@@ -4,8 +4,20 @@ Starter repo cho bài lab **Data Pipeline, Privacy & Production PoC**: 14 challe
 Repo cung cấp **dữ liệu offline + hạ tầng dùng chung + metric chuẩn + template báo cáo** để nhóm tập trung vào phần quan trọng:
 vấn đề, baseline, thuật toán, đánh giá trung thực, human-in-the-loop và quyết định GO/HOLD/REWORK.
 
-> Repo **không** chứa lời giải. `src/pipeline.py` là file nhóm sở hữu; mọi thuật toán (kể cả baseline) do nhóm tự cài.
+> Bản làm việc này đã triển khai **T05** trong `src/pipeline.py` và `src/t05/`;
+> các track khác vẫn giữ scaffold chung. Baseline và thuật toán T05 đều chạy offline.
 > Tài liệu học tập, không thay tư vấn pháp lý.
+
+**Repository:** [Nguyen Hai Dang · 2A202603190](https://github.com/44244432664/K5-Day6-L2-NguyenHaiDang-2A202603190-DataGovernanceAndPrivacy)
+· T05 · owner mới: **Nguyen Hai Dang**. Mã nguồn được chuyển từ working tree
+T05 trước đó; nguồn gốc được nêu trong `reports/group_report.md`.
+Python đã kiểm chứng: **3.12.0**; dependency dùng `requirements.txt`.
+Không copy `.venv`, secrets hoặc kết quả chạy cũ.
+
+Theo lựa chọn strict submission, `.gitignore` chỉ cho phép file mới thuộc các
+nhóm deliverable của hướng dẫn gốc. Tài liệu bổ sung `docs/T05_*.md`, `DOC/`,
+`PLAN/`, `TASK/`, `.python-version` và `requirements-lock.txt` chỉ lưu local,
+không thuộc nội dung clone/submission. Không xoá các file này hoặc file cá nhân.
 
 ## 1. Quickstart (≤ 5 phút, chạy offline)
 
@@ -21,6 +33,50 @@ make baseline TRACK=t11      # ghi out/baseline/; repo học viên không có gt
 ```
 
 Chọn challenge: sửa `configs/lab.yaml` (`track`, `track_config`, `owner`, `group_id`), đọc `docs/tracks/TXX.md`.
+
+### T05 · Leakage & Near-Duplicate Guardian
+
+Kiến trúc, policy và giới hạn: [`reports/group_report.md`](reports/group_report.md),
+[`reports/metric_contract.md`](reports/metric_contract.md), và docstrings trong `src/t05/`.
+
+Protocol v2 thêm kiểm chứng RGB dưới crop/exposure có giới hạn và review theo
+prediction sau grouping. Không dùng instructor GT. Dùng output mới `out/poc_v2`:
+review export của protocol cũ sẽ bị từ chối bởi fingerprint (không xoá audit cũ).
+
+```powershell
+# Kiểm provenance public fixture
+.\.venv\Scripts\python.exe -m tools.verify_manifests fixtures\t05_near_duplicate
+
+# Baseline: SHA-256 + random split độc lập (decision luôn HOLD)
+.\.venv\Scripts\python.exe -m src.main --track t05 --pipeline src.t05.baseline --output out\baseline --run-name baseline --offline --seed 42
+
+# PoC: near-duplicate + group-aware split + review + decision
+.\.venv\Scripts\python.exe -m src.main --track t05 --output out\poc_v2 --run-name poc --offline --seed 42
+
+# Tests
+.\.venv\Scripts\python.exe -m pytest -o addopts='' -q
+```
+
+PoC sinh `suspect_pairs.csv`, `split_manifest.csv`, evidence, duplicate/split
+groups, review queue + contact sheet, audit, diagnostics, decision và run info.
+Mở `out/poc_v2/contact_sheet.html`, export CSV thành
+`out/poc_v2/review_queue_reviewed.csv`, rồi chạy lại đúng lệnh PoC để validate
+fingerprint, apply relation và rebuild toàn bộ kết quả.
+
+T05 dùng ba override rõ nghĩa: `duplicate`, `same_scene_only`,
+`different_scene`. Reject bắt buộc chọn một relation nonduplicate; reject duplicate
+không tự động chứng minh hai ảnh khác scene.
+
+Ground truth không có trong repo học viên. Chỉ sau khi instructor overlay được cài:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.evaluate --track t05 --pred out\baseline\suspect_pairs.csv --run-name baseline --out reports\metrics_baseline.json
+.\.venv\Scripts\python.exe -m src.evaluate --track t05 --pred out\poc_v2\suspect_pairs.csv --run-name poc --out reports\metrics_poc.json
+.\.venv\Scripts\python.exe -m src.compare reports\metrics_baseline.json reports\metrics_poc.json --out reports\table1_baseline_vs_poc.md
+```
+
+Không diễn giải diagnostic cấu trúc hoặc decision GO thành official pair F1 / xác
+nhận zero true leakage khi chưa có hidden GT.
 
 ## 2. Contract lệnh (giảng viên sẽ chạy đúng các lệnh này)
 

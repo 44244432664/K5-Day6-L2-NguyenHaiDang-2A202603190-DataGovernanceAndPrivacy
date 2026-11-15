@@ -1,6 +1,2 @@
 member,git_author_name,git_email,role,modules_files,commit_shas,evidence_note,presenter
-Member 1,,,Lead / Integrator,src/main.py; configs/,,,
-Member 2,,,Data & fixtures,fixtures/; tools/,,,
-Member 3,,,Core algorithm,src/pipeline.py,,,
-Member 4,,,QA / metric,tests/; reports/metrics_*.json,,,
-Member 5,,,Human review + report,reports/group_report.md; demo/,,,
+Nguyen Hai Dang,44244432664,haidang453@gmail.com,Confirmed destination owner / local migration and integration,"configs/lab.yaml; configs/tracks/t05.yaml; src/pipeline.py; src/t05/; tools/t05_experiments.py; tests/test_t05_*.py; README.md; docs/; reports/; requirements-lock.txt; .python-version",PENDING,"User confirmed the destination owner. T05 was imported as uncommitted working-tree files from the DangQuocThai checkout whose configured owner was Dang Quoc Thai. Paths and current Git config do not establish implementation authorship. No commit or push performed; contribution SHAs remain pending.",PENDING

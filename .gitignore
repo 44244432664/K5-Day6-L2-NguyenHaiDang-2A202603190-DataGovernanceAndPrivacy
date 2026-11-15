@@ -1,34 +1,121 @@
-# Secrets — NEVER commit tokens
+# Strict submission policy for NEW files, based on the original instructor .md
+# guides at b0ce8bf: README sections 2-6, docs/tracks/T01-T14.md,
+# docs/INSTRUCTOR_SETUP.md, reports/README.md, and the report templates.
+# The guides are not themselves a closed allowlist; this stricter interpretation
+# was explicitly selected by the user. Existing tracked starter files are kept.
+# gitignore does not remove tracked files or delete local files.
+
+# Deny new files by default, but traverse directories to find allowed files.
+*
+!*/
+
+# Instructor-listed root files / report equivalent.
+!/.gitignore
+!/README.md
+!/report.md
+!/requirements.txt
+!/pyproject.toml
+!/Makefile
+!/run.sh
+
+# Team implementation, helper modules, tests, and configuration.
+# README sections 1/3/4/6 permit algorithms, team tests, configs, and tooling.
+!/src/**/*.py
+!/tests/**/*.py
+!/tools/**/*.py
+!/configs/**/*.yaml
+!/configs/**/*.json
+
+# Original instructor documentation (not additional local implementation notes).
+!/docs/INSTRUCTOR_SETUP.md
+!/docs/tracks/T0[1-9].md
+!/docs/tracks/T1[0-4].md
+!/fixtures/t03_synthetic/README_usability_rule.md
+!/fixtures/t04_sensor_sync/README_units.md
+!/fixtures/t09_privacy_gate/README_disclaimer.md
+
+# Exact submission artifacts named in reports/README.md and the track guides.
+# Metrics/table files must be script-generated; reviewed evidence must be genuine.
+!/reports/README.md
+!/reports/group_report.md
+!/reports/metric_contract.md
+!/reports/team_contributions.csv
+!/reports/metrics_baseline.json
+!/reports/metrics_poc.json
+!/reports/table1_baseline_vs_poc.md
+!/reports/review_queue.csv
+!/reports/decision_log.csv
+
+# Demo slides and screenshots are permitted by README section 3 / demo milestone.
+!/demo/.gitkeep
+!/demo/**/*.md
+!/demo/**/*.pdf
+!/demo/**/*.pptx
+!/demo/**/*.html
+!/demo/**/*.png
+!/demo/**/*.jpg
+!/demo/**/*.jpeg
+!/demo/**/*.svg
+
+# Public input fixtures shipped by the instructor are already tracked. New
+# fixture/input files remain denied by default; do not silently change the testset.
+
+# Local-only additions not specified as instructor submission deliverables.
+/PLAN/
+/TASK/
+/DOC/
+/MISC/
+/HUONG_DAN_HOC_VIEN.html
+/rating.md
+/.python-version
+/requirements-lock.txt
+/docs/T05_IMPLEMENTATION.md
+/docs/T05_ENVIRONMENT_AND_MIGRATION.md
+
+# Hard exclusions override ALL allow rules above, including code/demo rules.
+# Secrets: keep only the instructor's root .env.example template.
 .env
+.env.*
+*.env
 *.token
+*.pem
+*.key
+!/.env.example
 
-# Real data downloaded from Hugging Face (contains real people / plates; license-restricted)
-data/real/
-data/cache/
+# Real data / local downloads may contain personal or license-restricted data.
+**/data/real/
+**/data/cache/
+wheelhouse/
+py_env/
+models_optional/
 
-# Instructor-only material (ground truth, generators, hidden eval) lives in the private
-# instructor repo and is copied in as an overlay — never commit it here
-# The ** prefix also catches nested copies of the repo (e.g. a vendored checkout)
+# Private instructor overlays: never publish GT, generators, or hidden eval.
+# Nested rules also cover accidental copies below an otherwise allowed folder.
 **/fixtures/*/gt/
 **/make_fixtures.py
 **/make_hidden_eval.py
 **/hidden_eval/
 
-# Run outputs
+# Reproducible run artifacts are generated locally, not copied into the repo.
 out/
 runs/
 *.log
 
-# Python
+# Virtual environments, caches, build output, and machine-specific settings.
 .venv/
 venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 .ipynb_checkpoints/
-
-# OS / IDE
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
 .DS_Store
 .idea/
 .vscode/
