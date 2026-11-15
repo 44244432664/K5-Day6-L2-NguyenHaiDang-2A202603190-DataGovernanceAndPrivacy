@@ -1,352 +1,295 @@
-# Group Report — T05 Leakage & Near-Duplicate Guardian
+# Báo cáo nhóm — T05: Phát hiện rò rỉ dữ liệu và ảnh gần trùng lặp
 
-> Status: 2026-11-15. Official metric fields remain pending because the
-> instructor ground-truth overlay is not installed. Observable public-run
-> diagnostics are not substitutes for hidden-label metrics.
+> Cập nhật ngày 15/11/2026. Theo bố cục bản mẫu trong kho nguồn; điền bằng minh
+> chứng của kho Nguyen Hai Dang. Chưa có nhãn chuẩn (GT) giảng viên: số liệu tổng
+> hợp và kiểm tra cấu trúc không thay thế điểm chính thức.
 
-> Submission-file policy: the user selected a strict instructor-listed allowlist.
-> Extra documentation/environment snapshots referenced below (`DOC/`, `PLAN/`,
-> `TASK/`, `docs/T05_*.md`, `.python-version`, `requirements-lock.txt`) are retained
-> locally but ignored. The versioned submission reference is this report, README,
-> metric contract, implementation docstrings/tests, and the named report artifacts.
+## 00 · Thông tin chung
 
-## 00 · Header
-
-| Item | Value |
+| Mục | Giá trị |
 |---|---|
-| Group ID | G01 |
-| Challenge | T05 · Leakage & Near-Duplicate Guardian |
-| Known member / role | Nguyen Hai Dang · confirmed destination owner; migration/integration validation; implementation authorship remains pending Git evidence |
-| Other team members | Not supplied; no names or contributions inferred |
-| Git URL | <https://github.com/44244432664/K5-Day6-L2-NguyenHaiDang-2A202603190-DataGovernanceAndPrivacy> |
-| Project commit | **Pending** — T05 changes are uncommitted |
-| Tag `demo-180m` | **Pending** — no repository tags exist |
-| Tag `final-24h` | **Pending** — no repository tags exist |
-| Deadline | Not supplied |
+| Mã nhóm | G01, theo `configs/lab.yaml` |
+| Bài thực hiện | T05 · Leakage & Near-Duplicate Guardian |
+| Thành viên đã xác nhận và vai trò | Nguyen Hai Dang · MSSV 2A202603190 theo tên kho; chủ sở hữu cấu hình, tích hợp, chuyển kho và kiểm chứng |
+| Thành viên khác | Chưa được cung cấp; cần xác nhận danh sách và quy mô nhóm theo yêu cầu lớp, không tự thêm tên |
+| Kho Git | <https://github.com/44244432664/K5-Day6-L2-NguyenHaiDang-2A202603190-DataGovernanceAndPrivacy> |
+| Commit chứa triển khai T05 | `69301c20612c98130438607c1d81ece81457fb3c`; tác giả `44244432664 <haidang453@gmail.com>`; 15/11/2026 lúc 13:31:01, múi giờ +07:00 |
+| Tag `demo-180m` | Chưa có trong danh sách tag cục bộ |
+| Tag `final-24h` | Chưa có trong danh sách tag cục bộ |
+| Hạn nộp theo giờ Việt Nam | Chưa được cung cấp; không suy ra hạn nộp từ thời điểm commit |
 
-Current `run_info.json` files show `b0ce8bf`, the upstream HEAD present during
-validation. That SHA does **not** contain the uncommitted T05 working tree and is
-not presented as the implementation commit.
+Mã T05 được chuyển từ working tree kho DangQuocThai. Đổi chủ sở hữu cấu hình
+không gán lại toàn bộ tác quyền mã đã nhập. Commit trên có thật, chứa 32 tệp thay
+đổi; xem mục 10. Các `run_info.json` hiện có trong `out/baseline/` và `out/poc_v2/`
+được tạo trước commit này nên còn ghi `git_sha=b0ce8bf`. Đây là SHA nền upstream,
+không phải commit triển khai; không sửa dữ liệu lịch sử để thay SHA.
 
-This working tree was locally migrated from the DangQuocThai checkout. Its old
-configured owner was Dang Quoc Thai; historical validation records retain that
-context and are not rewritten as Nguyen Hai Dang's authored work. The user
-confirmed Nguyen Hai Dang as the owner for new destination runs. No commit or push
-was requested. See `docs/T05_ENVIRONMENT_AND_MIGRATION.md` for scope and provenance.
+## 01 · Phát biểu bài toán
 
-## 01 · Problem statement
+- **Ai chịu ảnh hưởng:** người phát triển mô hình, chủ dữ liệu và người đánh giá.
+  Ảnh trùng ở cả train/test làm điểm cao giả tạo và gây quyết định phát hành sai.
+- **Điểm nghẽn:** SHA-256 chỉ bắt tệp giống byte; nén lại, đổi sáng hoặc crop có
+  thể bị bỏ sót. Gom theo cạnh yếu/màu giống nhau có thể nhập nhầm cảnh.
+- **Đầu vào → đầu ra:** ảnh, `images.csv`, manifest và cấu hình → dự đoán cặp,
+  nhóm trùng, nhóm ràng buộc chia tập, split, hàng đợi duyệt, audit và quyết định.
+- **Hai quan hệ riêng:** trùng lặp tạo cặp dương; cùng cảnh/chia tập chỉ buộc ảnh
+  ở một tập, không tự biến thành cặp trùng.
+- **Cần chủ dữ liệu xác nhận:** ý nghĩa camera/thời gian, chi phí bỏ sót/gộp nhầm,
+  quyền sử dụng và người có thẩm quyền phê duyệt.
 
-Image duplicates and related captures can cross a train/test boundary, allowing a
-model to see effectively the same content during training and evaluation. This
-inflates measured quality and can cause an unsafe release decision. Data owners,
-model developers, reviewers, evaluators, and people represented in real images
-bear the consequences of false confidence, false merges, and inappropriate reuse.
+**GO:** kiểm tra cấu trúc đạt. **HOLD:** còn mâu thuẫn, review chưa giải quyết,
+nhóm quá lớn hoặc không thể chia hai tập. **REWORK:** có lỗi cấu trúc có thể sửa,
+như nhóm/cặp dương vượt train/test. Baseline luôn HOLD. GO không chứng minh F1 cao
+hoặc không còn rò rỉ thật; pháp chế/DPO phải xác nhận các giả định pháp lý.
 
-The system takes an image table, image files, a provenance manifest, and frozen
-T05 configuration. It emits pair predictions, duplicate and split groups, a
-group-aware split manifest, review material, audit records, diagnostics, and a
-GO/HOLD/REWORK decision.
+## 02 · Dữ liệu và nguồn gốc
 
-Two relations remain separate:
-
-- **Duplicate:** effectively the same visual content; emitted as a positive pair.
-- **Scene/split constraint:** content should stay in one split but is not
-  necessarily duplicate; affects only split grouping.
-
-Pre-evaluation policy:
-
-- **GO:** observable structural checks pass with no blocking conflict, unresolved
-  review, crossing, oversized group, or dropped image.
-- **HOLD:** ambiguity or an indivisible/oversized unsafe component requires a
-  human or policy decision; the exact-hash/random-split baseline is always HOLD.
-- **REWORK:** a deterministic structural defect exists, such as a predicted/group
-  crossing or feasible but unusable split.
-
-GO is provisional structural approval, not proof of zero true leakage. A data
-owner must confirm metadata semantics and acceptable false-merge/miss costs;
-DPO/legal review is required before using real personal data.
-
-## 02 · Data and provenance
-
-| Use | N | Source | License | Synthetic? |
+| Tập/mục đích | Số lượng | Nguồn | Giấy phép | Tổng hợp? |
 |---|---:|---|---|---|
-| Public fixture / smoke run | 120 images | `fixtures/t05_near_duplicate/`; instructor fixture tool, seed 42 | CC0-1.0 declared in `manifest.csv` | Yes |
-| Internal development examples | Depends on supplied sources | `tools/t05_experiments.py` generated variants | Inherits source constraints; operator must verify | Generated variants |
-| Official eval / heldout | Pending | Instructor private overlay | Pending instructor manifest | Unknown to student repo |
+| Bộ mẫu công khai | 120 ảnh, 4 camera | `fixtures/t05_near_duplicate/`; nguồn sinh và seed 42 trong manifest | CC0-1.0 theo manifest | Có |
+| Bộ hồi quy nội bộ | 20 ảnh từ 4 nguồn | Bộ sinh trong `tests/test_t05_quality_mitigation.py` và `tools/t05_experiments.py` | Ảnh tự sinh phục vụ kiểm thử, không dùng ảnh người thật | Có |
+| Hai bộ xác nhận nội bộ | Mỗi bộ 30 ảnh từ 6 nguồn; seed nguồn 2027 hoặc 9173 | Bố cục/kích thước ảnh khác bộ hồi quy | Ảnh tự sinh phục vụ kiểm thử | Có |
+| Đánh giá chính thức | Chưa biết số nhãn/cặp | GT riêng giảng viên chưa cài | Chờ manifest của giảng viên | Chưa xác minh |
 
-Public input schema is `image_id,path,camera_id,captured_at`. The manifest covers
-each image plus `images.csv` and declares source, license, and SHA-256. Strict
-provenance verifies coverage, root containment, decodability, and hashes.
+Schema công khai: `image_id,path,camera_id,captured_at`, không có `scene_id` hay
+`dup_group_id`. Manifest có 121 dòng dữ liệu: 120 ảnh và `images.csv`. Đề bài mô
+tả 20 cảnh nhưng pipeline không có nhãn cảnh để kiểm chứng. Kiểm manifest bằng
+`python -m tools.verify_manifests fixtures/t05_near_duplicate`: **1 manifest, 0 lỗi**.
+Không tạo lại manifest để che lỗi hash.
 
-```powershell
-.\.venv\Scripts\python.exe -m tools.verify_manifests fixtures\t05_near_duplicate
-# OK fixtures\t05_near_duplicate\manifest.csv
-# 1 manifests, 0 failing
-```
+Baseline chia từng ảnh; PoC chia nguyên nhóm. Không bỏ ảnh hợp lệ để làm đẹp số
+rò rỉ. Không dùng dữ liệu thật, mô hình tải ngoài hoặc GT giảng viên trong
+pipeline; bật chặn mạng và chặn đọc GT khi chạy.
 
-Seed is 42. Baseline assigns images independently. PoC assigns complete split
-groups and never uses `scene_id` or `dup_group_id` at runtime. No real dataset,
-external model, network download, or GT file was used.
-
-## 03 · Research and design
+## 03 · Nghiên cứu và thiết kế
 
 ```text
-images + table + manifest + frozen config
-  → validate provenance
-  → SHA-256, pHash, dHash, histogram, thumbnail
-  → canonical all-pairs evidence and duplicate classification
-  → conservative duplicate groups + separate scene/burst constraints
-  → deterministic whole-group train/test split
-  → uncertainty × consequence review queue
-  → validated relation override + append-only audit
-  → rebuild groups/split → validate → GO/HOLD/REWORK
+Ảnh + metadata + manifest + cấu hình
+ → kiểm nguồn gốc/đầu vào
+ → SHA-256, pHash, dHash, histogram, ảnh thu nhỏ
+ → kiểm chứng RGB dưới crop/độ sáng có giới hạn (v2)
+ → phân loại cặp, nhóm trùng có kiểm soát cạnh nối yếu
+ → thêm ràng buộc cảnh/burst, chia nguyên nhóm
+ → xếp hàng duyệt theo bất định và ảnh hưởng lên kết quả gom nhóm
+ → áp quan hệ duyệt, ghi audit chỉ nối thêm, dựng lại nhóm/split
+ → kiểm đầu ra, quyết định GO/HOLD/REWORK
 ```
 
-Design choices:
+1. pHash/dHash và ảnh thu nhỏ phản ánh cấu trúc. Histogram chỉ có trọng số 0.10,
+   không đủ để kết luận trùng khi đứng một mình.
+2. Kiểm các cặp chéo trước khi nhập nhóm; cạnh yếu không tạo nhóm trùng theo
+   chuỗi tùy tiện. Nhóm m ảnh xuất đủ m(m−1)/2 cặp theo hợp đồng evaluator.
+3. Camera/thời gian chỉ hỗ trợ cảnh/chia tập. Cạnh burst và tổng khoảng thời
+   gian burst đều tối đa 60 giây, tránh nối chuỗi không giới hạn.
+4. V2 so khớp RGB 48×32 với crop tâm 0–12% mỗi phía; một hệ số sáng chung trong
+   [0.625,1.6], không đổi riêng màu từng kênh. Sai số tương đối tối đa 0.05;
+   độ biến thiên không gian tối thiểu 0.02. Ảnh ít chi tiết không giống byte
+   phải chờ duyệt, không tự kết luận bằng ảnh thu nhỏ phẳng.
+5. Hàng đợi cân bằng cặp đã được nhóm nhận, cặp bất định, cạnh cầu bị chặn và bẫy
+   màu; đa dạng quan hệ giữa các nhóm thay vì lặp một nhóm cạnh cầu.
+6. Đánh đổi: độ lệch tỷ lệ test được chấp nhận để không phá nhóm; RGB tăng thời
+   gian chạy nhưng không cần tải weights. Chưa có đối chứng embedding cục bộ.
 
-1. SHA-256 detects exact byte identity without claiming visual equivalence.
-2. pHash/dHash and thumbnail evidence provide complementary structural signals.
-   RGB histogram contributes only 0.10 and cannot independently classify a
-   duplicate because similar colors do not imply the same scene.
-3. Complete-link guarded grouping prevents one weak pair from joining otherwise
-   incompatible duplicate components. Pair output expands every accepted group to
-   all within-group pairs, matching evaluator semantics.
-4. Same-camera/time metadata can add a split constraint but never prove duplicate
-   content. Burst span is bounded to prevent an unbounded transitive chain.
-5. Whole-group splitting trades exact 30% balance for leakage prevention.
-6. Review prioritizes uncertainty and downstream merge/split impact. Reviewed
-   relations trigger a complete rebuild.
+API/quy tắc chi tiết ở docstring `src/t05/`; ngưỡng tại `configs/tracks/t05.yaml`.
+Tài liệu bổ sung ngoài danh sách nộp chỉ lưu local theo `.gitignore`.
 
-No embedding model is bundled. This avoids undocumented weights/downloads, but
-limits robustness to crop, viewpoint, occlusion, and domain changes.
+## 04 · So sánh baseline và PoC
 
-Frozen policy is in `configs/tracks/t05.yaml`; metric semantics are in
-`reports/metric_contract.md`; schemas and APIs are in
-`docs/T05_IMPLEMENTATION.md`.
+**Baseline:** SHA-256 bằng nhau + chia ngẫu nhiên từng ảnh, seed 42.
+**PoC v2:** nhiều đặc trưng + xác minh RGB + tách nhóm trùng/cảnh + chia theo nhóm
+và duyệt/audit. Cùng 120 ảnh, 7.140 cặp ứng viên và schema đầu ra. PoC có B=20;
+baseline không có bước duyệt, không báo số lượt duyệt đã sử dụng là bằng nhau.
 
-## 04 · Baseline versus PoC
+### Bảng 1 · Chỉ số chính thức — chờ GT
 
-**Baseline:** exact SHA-256 equality over the fixed all-pairs pool, then an
-independent seeded image split. It demonstrates why exact-only detection and
-random splitting are insufficient and returns HOLD.
+| Chỉ số của bộ chấm | Baseline | PoC | Giải thích |
+|---|---|---|---|
+| Leakage Detection F1 (pair) | Chưa đánh giá | Chưa đánh giá | Tăng là tốt; cần GT nhóm trùng |
+| Pair precision / Pair recall | Chưa đánh giá | Chưa đánh giá | Cần TP/FP/FN theo GT |
+| False merge rate | Chưa đánh giá | Chưa đánh giá | Cần nhãn cảnh thật |
+| Residual cross-split leak (near-dup) | Chưa đánh giá | Chưa đánh giá | Cần GT nhóm trùng |
+| Residual cross-split leak (scene) | Chưa đánh giá | Chưa đánh giá | Cần GT cùng cảnh |
+| % data kept | Chưa chấm chính thức | Chưa chấm chính thức | Tỷ lệ giữ ảnh quan sát được được báo riêng |
 
-**PoC:** combined visual evidence, conservative grouping, bounded scene
-constraints, whole-group split, impact-aware review, audit, and structural release
-policy. Both use the same 120 public images, 7,140 candidate pairs, seed 42, and
-output pair schema. Review budget is 20 for the PoC.
+Chưa sinh `reports/metrics_baseline.json`, `reports/metrics_poc.json` và
+`reports/table1_baseline_vs_poc.md`; không tạo số/bảng chính thức giả.
 
-### Official Table 1 — pending instructor GT
+### Chẩn đoán quan sát được — không thay thế Bảng 1
 
-| Evaluator metric | Baseline | PoC | Status |
-|---|---:|---:|---|
-| Leakage Detection F1 (pair) | Pending | Pending | GT overlay absent |
-| Pair precision / recall | Pending | Pending | GT overlay absent |
-| False merge rate | Pending | Pending | Requires instructor `scene_id` |
-| Residual cross-split leak (near-dup) | Pending | Pending | Requires `dup_group_id` |
-| Residual cross-split leak (scene) | Pending | Pending | Requires `scene_id` |
-| % data kept | Pending | Pending | Generate with unchanged evaluator and GT |
+Nguồn: các `diagnostics.json` và `run_info.json` tại `out/baseline/`, `out/poc_v2/`
+của kho đích; đây là lần chạy đã lưu trước commit `69301c...`.
 
-`reports/metrics_baseline.json`, `reports/metrics_poc.json`, and
-`reports/table1_baseline_vs_poc.md` are deliberately absent. Generate them by
-scripts only after GT installation; no placeholder values are supplied.
+| Chẩn đoán | Baseline | PoC v2 |
+|---|---:|---:|
+| Ảnh / dòng cặp | 120 / 7.140 | 120 / 7.140 |
+| Cặp dự đoán dương | 20 cặp giống byte | 128 cặp; chưa biết số đúng theo GT |
+| Train / test / drop | 84 / 36 / 0 | 84 / 36 / 0 |
+| Cặp dương vượt train/test | 7 cặp giống byte | 0 cặp dự đoán dương |
+| Nhóm trùng / nhóm chia tập | Không áp dụng | 59 / 33 |
+| Tỷ lệ giữ ảnh | 1.0 | 1.0 |
+| Thời gian toàn lần chạy | 3.5191 giây | 15.1477 giây |
+| Quyết định cấu trúc | HOLD | GO |
 
-### Observable diagnostics — not official metrics
+Không suy ra 128 cặp đều đúng hoặc rò rỉ theo cảnh thật bằng 0 từ bảng này.
 
-**Historical v1 table.** A subsequent GT-free development revision is summarized
-below; do not present these older runs as current v2 output.
+## 05 · Giao thức đánh giá
 
-These values come from generated `diagnostics.json` and `run_info.json` files.
+- **Đơn vị:** cặp không thứ tự, hai ID khác nhau; ghép chính xác ID, không IoU.
+- **GT dương:** hai ảnh cùng `dup_group_id`; mở rộng đủ các cặp trong nhóm.
+- **Dự đoán dương:** dòng `pred_dup=1`; các dòng 0 không được tính là dương.
+- **Công thức:** P=TP/(TP+FP), R=TP/(TP+FN), F1=2PR/(P+R); giữ nguyên xử lý mẫu số
+  rỗng. Khai báo đầy đủ ở `reports/metric_contract.md`.
+- **Cố định:** seed 42, điểm thô 0.75, pHash/dHash tối đa 8 bit khác nhau, B=20,
+  mục tiêu test 0.30; xác minh v2 theo mục 03 và cấu hình hiện tại.
+- **Không tune theo điểm chính thức.** Ví dụ đã xem là phát triển/hồi quy, không
+  còn là holdout chưa quan sát. Hai bộ tổng hợp xác nhận không phải hidden eval.
+- **Bất định:** công cụ hỗ trợ bootstrap theo nguồn/cảnh, không coi các cặp tương
+  quan là độc lập. Lần tái hiện số cho báo cáo đặt `bootstrap_iterations=0`,
+  nên không công bố khoảng tin cậy chưa tính.
 
-| Diagnostic | Baseline | Automatic PoC | Reviewed mechanism rerun |
-|---|---:|---:|---:|
-| Images / candidate rows | 120 / 7,140 | 120 / 7,140 | 120 / 7,140 |
-| Predicted positive pairs | 20 exact | 115 | 115 |
-| Train / test / drop | 84 / 36 / 0 | 84 / 36 / 0 | 83 / 37 / 0 |
-| Observable positive cross-split pairs | 7 exact | 0 predicted | 0 predicted |
-| Duplicate / split groups | Not applicable | 62 / 41 | 62 / 40 |
-| Retention fraction | 1.0 | 1.0 | 1.0 |
-| Runtime on validation machine | 2.953 s | 8.313 s | 8.1178 s |
-| Structural decision | HOLD | GO | GO |
-
-The reviewed row is a mechanism test attributed to
-`task14-validation-bot-not-human`. It is not genuine human review and does not
-establish pair correctness.
-
-### GT-free quality mitigation — protocol v2
-
-At the user's request, v2 adds bounded centered-crop RGB verification with a
-single constrained exposure gain, a flat-image abstention gate, and stratified
-review of final group-derived matches. Original hash/score thresholds and review
-budget remain unchanged; the revised development-only protocol is declared in
-`reports/metric_contract.md` before any official evaluation.
-
-On the exposed synthetic regression set, TP/FP/FN changed from 24/17/16 to
-40/0/0. On two independently generated synthetic confirmation sets, each changed
-from 36/0/24 to 60/0/0. Both fresh sets use different source layouts/dimensions,
-7% crops, JPEG quality 55, and brightness factor 0.9. These small labelled toy
-results are **not official metrics** or guarantees for unseen real scenes.
-Isolating review ranking on unchanged v1 predictions, error coverage at budget 20
-improved from 0/33 to 5/33—still incomplete.
-
-Fresh public v2 runs produce 128 positive predictions, 59 duplicate groups, 33
-split groups, 84/36/0, retention 1.0, and zero observable crossings. Prediction
-correctness and true scene leakage are still unknown. A non-human review mechanism
-test changed four final flags and appended audit evidence. Eight deterministic
-artifacts matched byte-for-byte across fresh v2 runs.
-
-Full evidence and limitations: `DOC/T05_QUALITY_GAP_MITIGATION.md`. Use fresh
-`out/poc_v2/`; prior v1 reviewed exports are stale and must not be relabelled or
-have their fingerprints edited.
-
-## 05 · Evaluation protocol
-
-Primary metric is **Leakage Detection F1 (pair)** over canonical unordered image
-pairs. GT positives are all within-`dup_group_id` pairs. Predictions with explicit
-`pred_dup` use only rows equal to 1. Matching is exact normalized pair identity:
-no IoU or tolerance. Precision is `TP/(TP+FP)`, recall is `TP/(TP+FN)`, and F1 is
-their harmonic mean. Edge cases and denominators are frozen in
-`reports/metric_contract.md` and the unchanged evaluator.
-
-Thresholds were frozen before official evaluation: duplicate score 0.75; pHash
-and dHash Hamming limits 8; histogram L1 limit 0.08; thumbnail MAE limit 0.10;
-at least two structural/visual signals; review band 0.55–0.85; budget 20; target
-test fraction 0.30; seed 42.
-
-Internal uncertainty uses source/scene-cluster bootstrap instead of treating
-correlated pairs as independent. Official output must report point values with N,
-numerator, and denominator.
+Chỉ chạy sau khi có GT; đặt split manifest cạnh tệp dự đoán:
 
 ```powershell
-# Run only after instructor GT overlay is installed
 .\.venv\Scripts\python.exe -m src.evaluate --track t05 --pred out\baseline\suspect_pairs.csv --run-name baseline --out reports\metrics_baseline.json
 .\.venv\Scripts\python.exe -m src.evaluate --track t05 --pred out\poc_v2\suspect_pairs.csv --run-name poc --out reports\metrics_poc.json
 .\.venv\Scripts\python.exe -m src.compare reports\metrics_baseline.json reports\metrics_poc.json --out reports\table1_baseline_vs_poc.md
 ```
 
-Thresholds must not change after viewing official results. If baseline F1 is zero,
-state `baseline = 0` rather than a percentage gain.
+Nếu F1 baseline=0 phải ghi `baseline = 0`, không chia để báo phần trăm cải thiện.
 
-## 06 · Slices, failure cases, and compute
+## 06 · Lát cắt kết quả, lỗi và tài nguyên
 
-Official slices are pending GT. Required slices are exact, recompression,
-brightness, crop, same-scene nonduplicate, and visually similar different-scene.
-Instructor `transform` labels must not be exposed to production.
+Đã tái hiện bằng script ở kho đích tại `out/reports_vi_20261115T064455262838Z/`.
+Đây là **nhãn tổng hợp nội bộ**, không ghi vào metrics chính thức. Bộ hồi quy có
+115 cặp đủ điều kiện; mỗi bộ xác nhận có 235 cặp. Công cụ loại cặp chéo partition.
+Đối chiếu ID với ảnh qua `regression/dataset/development_images.csv`; các bảng
+`regression/evidence_v1.csv`, `regression/evidence_v2.csv` và `comparison.json`
+trong thư mục trên lưu minh chứng do script sinh.
 
-Two failure cases:
+| Bộ/lát cắt | Phiên bản cũ | V2 | Ghi chú |
+|---|---|---|---|
+| Hồi quy: TP / FP / FN | 24 / 17 / 16 | 40 / 0 / 0 | 40 cặp dương thật tổng hợp |
+| Recall cặp liên quan crop | 0/16 | 16/16 | Chỉ bộ hồi quy |
+| F1 hồi quy | 0.5925925925925926 | 1.0 | Không phải điểm chính thức |
+| Nguồn seed 2027: TP / FP / FN | 36 / 0 / 24 | 60 / 0 / 0 | Crop 7%, JPEG 55, hệ số sáng 0.9 |
+| Nguồn seed 9173: TP / FP / FN | 36 / 0 / 24 | 60 / 0 / 0 | Nguồn khác bộ hồi quy |
+| F1 hai bộ xác nhận | Xấp xỉ 0.75 mỗi bộ | 1.0 mỗi bộ | Bộ nhỏ, không phải điểm trên dữ liệu thật |
 
-1. **Histogram/color false merge.** Unrelated scenes may have near-identical color
-   distributions. Mitigation: 0.10 weight, minimum two non-histogram signals,
-   hard-negative slice, and review priority.
-2. **Weak transitive bridge and random split leakage.** One uncertain edge can
-   over-merge components, while baseline split 7 of its 20 exact positive pairs.
-   Mitigation: complete-link grouping, explicit cannot-links, bounded burst span,
-   whole-group split, and crossing validators.
+Các lỗi có nguyên nhân cụ thể:
 
-Validation machine: Windows 11 `10.0.26300`, Python 3.12.0, Intel64 Family 6 Model
-165 Stepping 2. Automatic PoC runtime was 8.313 seconds, approximately 69.275 ms
-per image or 1.164 ms per candidate pair. These are single-run diagnostics, not a
-benchmark with variance.
+1. **Gộp nhầm bố cục:** `dev:1:b:original`–`dev:1:c:original` là ảnh tổng hợp khác
+   cảnh nhưng nhiều hash vẫn đồng ý. Nhiều hash không chứng minh cùng nội dung;
+   v2 yêu cầu bố cục RGB tương thích, loại 17 FP hồi quy. Không quy toàn bộ các FP
+   này thành lỗi histogram đơn thuần; histogram chỉ đóng vai trò hỗ trợ.
+2. **Bỏ sót crop:** `dev:1:a:crop`–`dev:1:a:original` bị biến đổi hash toàn ảnh dù
+   còn nội dung tương ứng. Kiểm crop tâm phục hồi 16/16 cặp liên quan trên bộ hồi
+   quy, nhưng chưa bao quát crop lệch tâm/phối cảnh.
+3. **Rò rỉ sau chia tập:** baseline để 7/20 cặp giống byte ở hai tập. Giữ nguyên
+   nhóm suy luận khắc phục giao cắt dự đoán, chưa chứng minh không rò rỉ cảnh thật.
 
-## 07 · Human review, audit, and decision
+Giữ nguyên 33 lỗi/dự đoán/nhóm của bản cũ, chỉ thay xếp hàng duyệt thì độ phủ lỗi
+tăng từ 0/33 lịch sử lên **5/33**, B=20. Còn 28 lỗi không trong hàng đợi; không
+tuyên bố duyệt đã giải quyết mọi lỗi.
 
-`out/poc/review_queue.csv` contains at most 20 canonical pairs and immutable
-evidence. `contact_sheet.html` embeds images for offline dual-image review. Queue
-priority uses uncertainty, component sizes, bridge risk, and split impact.
-`review_context.json` binds review input to image bytes, config, and queue identity.
+Máy: Windows 11 `10.0.26300`, Python 3.12.0, Intel64 Family 6 Model 165 Stepping 2.
+Từ JSON hiện có, quy đổi baseline khoảng 2.932583 giây/100 ảnh, PoC khoảng
+12.623083 giây/100 ảnh. Đây là quy đổi một lần chạy, không phải benchmark cô lập
+tải CPU hay trung bình nhiều lần.
 
-Review relations are explicit: approve means `duplicate`; reject requires
-`same_scene_only` or `different_scene`; edit assigns a relation; escalate/skip
-remains unresolved and causes HOLD. Accepted decisions append actor, before/after
-state, reason, and time to `audit_log.jsonl`. Automatic pairs stay preserved and
-all dependent groups, splits, diagnostics, and decisions are rebuilt.
+## 07 · Con người, nhật ký và quyết định
 
-Task 14 validated the mechanism with one explicit non-human rejection to
-`same_scene_only`. It produced one audit event, one changed constraint, 40 split
-groups, an 83/37/0 split, full retention, and structural GO. This proves plumbing
-and audit behavior only. A named human reviewer must independently review/export
-the queue before submission sign-off.
+`out/poc_v2/review_queue.csv` có 20 mục; HTML nhúng hai ảnh để duyệt ngoại tuyến.
+Xuất bản đã duyệt thành `review_queue_reviewed.csv` rồi chạy lại cùng cấu hình.
+Fingerprint ràng buộc dữ liệu/cấu hình/hàng đợi; không sửa để ép dùng bản cũ.
 
-New destination decision owner is `Nguyen Hai Dang`; the source checkout's
-historical runs used `Dang Quoc Thai`. `POLICY_CHECKS_PASSED` means declared
-observable checks passed; it does not claim verified zero true leakage.
+| Thao tác | Ý nghĩa |
+|---|---|
+| `approve` | Xác nhận `duplicate` |
+| `reject` | Bắt buộc chọn `same_scene_only` hoặc `different_scene` |
+| `edit` | Gán rõ một trong ba quan hệ |
+| `escalate`, `skip` | Chưa giải quyết; mặc định chặn GO |
 
-## 08 · Reproduction and tests
+Thay đổi cần người duyệt và lý do. `audit_log.jsonl` chỉ nối thêm trạng thái
+trước/sau; giữ `automatic_pairs.csv`, dựng lại nhóm/cặp/split/chẩn đoán sau duyệt.
+Bộ kiểm thử xác nhận override thực sự đổi đầu ra, không chỉ sửa tệp hình thức.
+
+**Hiện tại:** lần chạy tại kho đích có `n_reviewed=0`; chưa có người thật ký duyệt.
+Các lượt bot thử trước chỉ kiểm cơ chế/audit, không được đổi thành phê duyệt con
+người. Chủ sở hữu là `Nguyen Hai Dang`; GO mang mã `POLICY_CHECKS_PASSED`, chỉ
+phản ánh cấu trúc. Chỉ sao chép hàng đợi đã được duyệt thật vào `reports/`.
+
+## 08 · Tái lập và kiểm thử
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m tools.verify_manifests fixtures\t05_near_duplicate
-
-# Baseline
 .\.venv\Scripts\python.exe -m src.main --track t05 --pipeline src.t05.baseline --output out\baseline --run-name baseline --offline --seed 42
-
-# PoC; review contact_sheet.html, save review_queue_reviewed.csv, then rerun
 .\.venv\Scripts\python.exe -m src.main --track t05 --output out\poc_v2 --run-name poc --offline --seed 42
-
-# Tests
-.\.venv\Scripts\python.exe -m pytest -o addopts='' -q
+.\.venv\Scripts\python.exe -m pytest -o addopts='' -q -rs
 ```
 
-Focused T05 Tasks 1–13 validation: **159 passed**. Task 14 full suite:
-**206 passed, 39 skipped**. Quality-mitigation validation adds 11 regression and
-synthetic confirmation tests (full result in its validation record). Task 14 record:
-`DOC/TASK_14_DOCUMENTATION_AND_SUBMISSION_VALIDATION.md`.
+Lần kiểm thử phục vụ báo cáo: **217 passed, 39 skipped trong 69.69 giây**. Toàn bộ
+39 mục bỏ qua cần GT chưa cài, không tính thành kiểm chứng thành công. Bao gồm
+kiểm provenance, chuẩn hóa cặp, cạnh cầu, giữ nhóm, crop/bẫy màu, review/audit,
+fingerprint cũ, chặn mạng/GT và lỗi đầu vào. Kiểm thử tự sinh dữ liệu tạm, không
+sửa fixture giảng viên. Mã hiện tại ở commit `69301c...`; các thay đổi của tác vụ
+này chỉ là báo cáo. Không sửa thuật toán, ngưỡng, bộ chấm hoặc kho nguồn.
 
-The source tree was uncommitted during validation. `b0ce8bf` in `run_info.json` is
-the upstream base, not implementation provenance. Repeat or clearly link the final
-run after creating the real implementation commit.
+Phiên bản thư viện đã đối chiếu trong môi trường chạy: NumPy 2.5.4, pandas 3.1.1,
+Pillow 13.0.0, OpenCV headless 5.0.0.93, SciPy 1.18.1 và pytest 9.2.0. Đây là
+môi trường kiểm chứng cụ thể, không bảo đảm mọi tổ hợp phiên bản trong dải hỗ trợ.
 
-## 09 · Limitations, privacy, and ethics
+## 09 · Giới hạn và đạo đức
 
-- Official pair quality and true-scene leakage remain unknown without GT.
-- Thresholds may not transfer across cameras, compression, or domains.
-- pHash/dHash and thumbnails are weak under heavy crop, perspective, occlusion,
-  overlays, and adversarial manipulation.
-- Camera/time metadata can be absent, wrong, or duplicated across devices.
-- All-pairs evidence is quadratic; 10× images means about 100× pairs.
-- No local embedding model is documented or evaluated.
-- False merges reduce utility; misses can inflate evaluation through leakage.
-- Public fixtures are synthetic CC0-1.0. Real images may contain faces, plates,
-  locations, or timestamps and require purpose limitation, access control,
-  retention policy, and verified licensing.
-- Structural GO is not GDPR, Vietnamese-law, security, or ethical certification.
-  DPO/legal/data-owner approval remains external.
+- Chưa có chất lượng theo GT; F1=1 trên bộ tổng hợp không thay điểm chính thức.
+- V2 chỉ thử crop tâm tối đa 12% mỗi phía và hệ số sáng có giới hạn; còn yếu với
+  crop lệch tâm, xoay, phối cảnh, che khuất, clipping và vùng ít chi tiết.
+- Cảnh rất giống vẫn có thể khớp RGB; metadata camera/thời gian có thể sai.
+- Toàn cặp có chi phí bậc hai: tăng 10 lần ảnh tạo khoảng 100 lần cặp.
+- Chưa có embedding cục bộ; hàng đợi B=20 chưa phủ đủ lỗi.
+- Ví dụ lỗi ở mục 06 là dữ liệu tự sinh, chưa xác nhận cặp bẫy cụ thể của fixture
+  theo nhãn cảnh thật. Cần người duyệt minh họa, không suy nhãn từ thứ tự ID.
+- Ảnh thật cần quyền sử dụng, giấy phép, mục đích, thời gian lưu, kiểm soát truy
+  cập và bảo vệ PII; CC0 của fixture tổng hợp không giải quyết mọi vấn đề dữ liệu thật.
+- Không tuyên bố đáp ứng GDPR/pháp luật Việt Nam từ GO/checklist; cần DPO/pháp chế.
 
-Priorities are candidate retrieval for scale, documented crop-resistant features,
-calibration on separated development data, human review, and heldout evaluation.
+Tiếp theo: duyệt thật, GT chính thức, dữ liệu phát triển đại diện hơn, kiểm crop
+khó, đo độ phủ lỗi theo B và truy hồi ứng viên để giảm chi phí.
 
-## 10 · Team contribution evidence
+## 10 · Đóng góp và minh chứng Git
 
-| Member | Git author/email | Role and files | Commit evidence | Presenter |
+| Thành viên | Tên/email Git | Phạm vi minh chứng | Commit | Trình bày? |
 |---|---|---|---|---|
-| Nguyen Hai Dang | Current local config: `44244432664 <haidang453@gmail.com>`; not a retroactive authorship claim | Confirmed destination owner; imported working-tree scope listed in `reports/team_contributions.csv` | **Pending** — no project commit by this identity; changes uncommitted | Pending |
-| Other members | Not supplied | Not inferred | Not fabricated | Pending roster |
+| Nguyen Hai Dang | `44244432664 <haidang453@gmail.com>` | Nhập/tích hợp T05: cấu hình, pipeline, module, công cụ, kiểm thử và báo cáo; không khẳng định tự viết toàn bộ mã chuyển từ kho nguồn | `69301c20612c98130438607c1d81ece81457fb3c` | Chưa xác nhận |
+| Thành viên khác | Chưa cung cấp | Không tự suy diễn | Chưa có minh chứng để điền | Chưa xác nhận |
 
-`git shortlog -sne --all` lists only upstream authors `loversky02` and `Tin Duong`;
-those commits are not claimed as team T05 contributions. Working-tree paths show
-scope, not authorship. Before submission, real contributors must commit their own
-work with verified identities and update both contribution tables.
+`git show --stat 69301c...` xác nhận 32 tệp thay đổi. `git shortlog -sne --all`
+ghi 1 commit của `44244432664`, 6 của `loversky02`, 4 của `Tin Duong`; hai tác giả
+sau là upstream, không tính thành đóng góp mới của nhóm. CSV giữ nguyên tên cột
+của mẫu, mô tả bằng tiếng Việt. Cần danh sách đầy đủ trước khi kết luận mỗi thành
+viên đều có commit thực chất.
 
-## 11 · References
+## 11 · Tài liệu tham khảo
 
-| Reference | Accessed | Relevance |
+| URL | Ngày xem | Ý nghĩa đối với thiết kế |
 |---|---|---|
-| scikit-learn, [Common pitfalls: data leakage](https://scikit-learn.org/stable/common_pitfalls.html#data-leakage) | 2026-11-15 | Motivates strict train/test separation; T05 extends it to related-image groups. |
-| Christoph Zauner, [Perceptual Image Hash Functions](https://www.phash.org/docs/pubs/thesis_zauner.pdf) | 2026-11-15 | Background for perceptual hashes and empirically selected distance thresholds. |
-| Creative Commons, [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | 2026-11-15 | License identifier declared by the synthetic fixture manifest. |
+| <https://scikit-learn.org/stable/common_pitfalls.html#data-leakage> | 15/11/2026 | Giải thích rò rỉ gây đánh giá lạc quan; cơ sở tách thông tin tập kiểm tra và không tune theo kết quả chấm. |
+| <https://creativecommons.org/publicdomain/zero/1.0/> | 15/11/2026 | Đối chiếu mã giấy phép manifest; CC0 không tự loại bỏ ràng buộc quyền riêng tư hoặc thay việc xác minh quyền sử dụng. |
 
-## 12 · Submission checklist
+## 12 · Danh sách kiểm tra trước khi nộp
 
-- [x] Offline baseline and PoC run with seed 42.
-- [x] Public provenance and license documented and verified.
-- [x] Prediction, split, evidence, group, review, diagnostic, and decision artifacts
-  generated and structurally validated.
-- [x] Failure cases, limitations, schemas, policy, and audit behavior documented.
-- [x] Mechanism check changed a relation and rebuilt dependent artifacts.
-- [ ] Genuine human review/sign-off received.
-- [ ] Instructor GT installed; official metrics/comparison generated by scripts.
-- [ ] Real team roster and individual Git contributions confirmed.
-- [ ] T05 implementation committed with verified author identity.
-- [ ] Required tags created at approved commits.
+- [x] Điền kho đích, chủ sở hữu, T05 và commit triển khai có thật.
+- [x] Có lệnh baseline/PoC ngoại tuyến, seed 42, kiểm thử và kiểm manifest.
+- [x] Có cặp/split/chẩn đoán và nêu giới hạn GO cấu trúc.
+- [x] Phân tích lỗi, cải thiện v2; tách nội bộ khỏi điểm chính thức.
+- [x] Ghi nhận commit thực chất của thành viên đã xác nhận và SHA trong CSV.
+- [ ] Xác nhận đủ danh sách nhóm, vai trò, người trình bày; đối chiếu commit từng người theo yêu cầu lớp.
+- [ ] Có người duyệt thật và minh chứng phê duyệt/audit tương ứng.
+- [ ] Có GT giảng viên; sinh metrics và bảng so sánh bằng script.
+- [ ] Tạo/đối chiếu `demo-180m`, `final-24h` tại các commit được chấp thuận.
 
-Unchecked items are explicit submission blockers.
+Mục chưa đánh dấu còn cần bổ sung trước khi xác nhận nộp hoàn tất. `DOC/`,
+`PLAN/`, `TASK/`, `docs/T05_*.md` và bản khóa môi trường bổ sung chỉ lưu local theo
+`.gitignore`. Nội dung bản nộp nằm ở README, báo cáo, metric contract, mã/kiểm thử.
+Không thay bất kỳ trường hay nội dung mặc định nào trong kho nguồn.
